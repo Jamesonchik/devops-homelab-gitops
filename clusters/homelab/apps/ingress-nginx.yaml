@@ -11,10 +11,11 @@ spec:
     targetRevision: "4.12.0"
     helm:
       values: |
-        global:
-          image:
-            registry: m.daocloud.io/registry.k8s.io
         controller:
+          image:
+            repository: m.daocloud.io/registry.k8s.io/ingress-nginx/controller
+            tag: "v1.12.0"
+            digest: ""
           service:
             type: NodePort
           admissionWebhooks:
