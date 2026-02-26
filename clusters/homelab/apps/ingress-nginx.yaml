@@ -11,6 +11,9 @@ spec:
     targetRevision: "4.12.0"
     helm:
       values: |
+        global:
+          image:
+            registry: m.daocloud.io/registry.k8s.io
         controller:
           service:
             type: NodePort
