@@ -1,0 +1,2 @@
+registry_hostport: "192.168.126.130:5000"
+test_image: "registry.k8s.io/ingress-nginx/controller:v1.12.0"
