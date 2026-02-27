@@ -1,5 +1,63 @@
-- name: restart containerd
+- name: Ensure curl exists
+  ansible.builtin.package:
+    name: curl
+    state: present
+
+- name: Check registry reachable from node (no proxy)
+  ansible.builtin.command: >
+    curl --noproxy '*' -m 3 -fsS http://{{ registry_hostport }}/v2/
+  changed_when: false
+
+- name: Ensure containerd config exists
+  ansible.builtin.stat:
+    path: /etc/containerd/config.toml
+  register: ctd_cfg
+
+- name: Generate default containerd config if missing
+  ansible.builtin.shell: |
+    set -euo pipefail
+    containerd config default > /etc/containerd/config.toml
+  when: not ctd_cfg.stat.exists
+  notify: restart containerd
+
+# ВАЖНО: удаляем возможный existing mirror-блок для registry.k8s.io (multiline regex)
+- name: Remove existing registry.k8s.io mirror table (avoid duplicated tables)
+  ansible.builtin.replace:
+    path: /etc/containerd/config.toml
+    regexp: '(?ms)^\[plugins\."io\.containerd\.grpc\.v1\.cri"\.registry\.mirrors\."registry\.k8s\.io"\]\n.*?(?=^\[|\Z)'
+    replace: ''
+    backup: true
+  notify: restart containerd
+
+- name: Add registry.k8s.io mirror to local registry
+  ansible.builtin.blockinfile:
+    path: /etc/containerd/config.toml
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: registry.k8s.io mirror"
+    insertafter: EOF
+    
+    block: |
+      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."registry.k8s.io"]
+        endpoint = ["http://{{ registry_hostport }}"]
+  notify: restart containerd
+
+- name: Ensure crictl config (remove warnings)
+  ansible.builtin.copy:
+    dest: /etc/crictl.yaml
+    mode: "0644"
+    content: |
+      runtime-endpoint: unix:///run/containerd/containerd.sock
+      image-endpoint: unix:///run/containerd/containerd.sock
+      timeout: 30
+      debug: false
+
+- name: Ensure containerd is running
   ansible.builtin.systemd:
     name: containerd
-    state: restarted
-    
+    state: started
+    enabled: true
+
+- name: Test pull via mirror (registry.k8s.io -> local registry)
+  ansible.builtin.command: >
+    crictl pull {{ test_image }}
+  register: pull_result
+  changed_when: "'Image is up to date' not in pull_result.stdout"
