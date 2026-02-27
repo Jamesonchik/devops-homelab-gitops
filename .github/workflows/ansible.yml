@@ -1,0 +1,63 @@
+name: ansible
+
+on:
+  push:
+    paths:
+      - "ansible/**"
+      - ".github/workflows/ansible.yml"
+  workflow_dispatch:
+    inputs:
+      playbook:
+        description: "Playbook path (relative to ansible/)"
+        required: true
+        default: "playbooks/k8s_containerd_mirror.yml"
+      limit:
+        description: "Limit hosts/group (optional)"
+        required: false
+        default: "k8s_nodes"
+      tags:
+        description: "Run only tags (optional)"
+        required: false
+        default: ""
+      check:
+        description: "Ansible --check (true/false)"
+        required: true
+        default: "false"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install linters
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install ansible-lint yamllint
+      - name: yamllint
+        run: yamllint -d relaxed ansible
+      - name: ansible-lint
+        run: ansible-lint ansible
+
+  apply:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: [self-hosted, homelab]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run playbook
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ansible
+
+          EXTRA=""
+          if [[ "${{ inputs.check }}" == "true" ]]; then
+            EXTRA="--check --diff"
+          fi
+
+          TAGS=""
+          if [[ -n "${{ inputs.tags }}" ]]; then
+            TAGS="--tags ${{ inputs.tags }}"
+          fi
+
+          sudo ansible-playbook "${{ inputs.playbook }}" --limit "${{ inputs.limit }}" $TAGS $EXTRA
+          
