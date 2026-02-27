@@ -24,7 +24,8 @@
 - name: Remove existing registry.k8s.io mirror table (avoid duplicated tables)
   ansible.builtin.replace:
     path: /etc/containerd/config.toml
-    regexp: '(?ms)^\[plugins\."io\.containerd\.grpc\.v1\.cri"\.registry\.mirrors\."registry\.k8s\.io"\]\n.*?(?=^\[|\Z)'
+    regexp: >-
+      (?ms)^\[plugins\."io\.containerd\.grpc\.v1\.cri"\.registry\.mirrors\."registry\.k8s\.io"\]\n.*?(?=^\[|\Z)
     replace: ''
     backup: true
   notify: restart containerd
